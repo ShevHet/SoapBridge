@@ -80,20 +80,6 @@ docker-compose up --build
 - SOAP‑эндпоинт `http://isapi.mekashron.com/icu-tech/icutech-test.dll` последние месяцы отдаёт HTML (страницу с кнопками WSDL) вместо SOAP XML.
 - В результате `/api/auth/login` и `/api/auth/register` получают 200 от внешнего сервиса, но не могут распарсить ответ → backend возвращает 500 с сообщением “Внутренняя ошибка сервера при обращении к сервису …”.
 - Это воспроизводится у всех: проблема на стороне внешнего сервиса. В коде всё завёрнуто в `SoapClientException`, логи содержат полный текст ответа. Для демо можно замокать SOAP клиент или использовать заранее подготовленные ответы.
-- Подробности и сценарии диагностики — в [TESTING_GUIDE.md](TESTING_GUIDE.md#проблема-ошибка-500-internal-server-error-при-регистрациивходе).
-
-## Разработка
-
-- DTO + валидаторы лежат рядом с контроллерами — проще ориентироваться
-- Конфиг SOAP сервиса в `appsettings.json` (`SoapService:Url`), можно переопределить переменными окружения
-- Критический CSS инлайнится в `index-prod.html`, остальное грузится через `preload`
-- В `app.js` есть `fetchWithRetry`: при сетевой ошибке делает одну повторную попытку с экспоненциальной задержкой
-
-## Документация
-
-- [TESTING_GUIDE.md](TESTING_GUIDE.md) — всё про тесты, чеклисты и диагностику
-- [DEPLOY_BACKEND.md](DEPLOY_BACKEND.md) / [DEPLOY_FRONTEND.md](DEPLOY_FRONTEND.md) — шпаргалки по Railway/Render/Netlify
-- `IcutechTestApi/wwwroot/BUILD_INSTRUCTIONS.md` — если нужно собрать фронтенд отдельно
 
 ## Если хочется подчистить артефакты
 

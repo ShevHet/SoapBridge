@@ -1,0 +1,21 @@
+{
+  "name": "icutech-test-api",
+  "version": "1.0.0",
+  "description": "Icutech Test API - Full-stack application",
+  "scripts": {
+    "check": "node scripts/checklist.js",
+    "check:prod": "FRONTEND_PROD_URL=https://your-site.netlify.app BACKEND_PROD_URL=https://your-api.railway.app node scripts/checklist.js",
+    "build:frontend": "cd IcutechTestApi/wwwroot && npm install && npm run build:prod",
+    "test:e2e": "cd tests/e2e && npm install && npm test",
+    "test:unit": "cd IcutechTestApi.Tests && dotnet test"
+  },
+  "keywords": [
+    "dotnet",
+    "api",
+    "frontend",
+    "soap"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

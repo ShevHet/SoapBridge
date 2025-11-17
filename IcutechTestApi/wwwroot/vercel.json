@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "buildCommand": "npm install && npm run build:prod && cp index-prod.html index.html",
+  "outputDirectory": ".",
+  "headers": [
+    {
+      "source": "/(.*\\.min\\.(css|js))",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*\\.html)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+

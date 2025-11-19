@@ -19,7 +19,7 @@ jobs:
           echo "Add your Render steps here if needed"
 
   deploy_railway:
-    name: Deploy to Railway
+    name: Deploy to Railway (explicit PROJECT_DIR = IcutechTestApi/wwwroot)
     runs-on: ubuntu-latest
     needs: deploy_render
     steps:
@@ -27,7 +27,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Show repo root (debug)
-        run: ls -la
+        run: |
+          echo "Working dir: $(pwd)"
+          ls -la
 
       - name: Install Railway CLI
         run: curl -sL https://railway.app/install.sh | sh
@@ -49,41 +51,33 @@ jobs:
         run: |
           if [ -f ".github/scripts/add-start-build-scripts.sh" ]; then
             bash .github/scripts/add-start-build-scripts.sh
-            # Stage changed package.json so it can be used in subsequent steps
-            if git status --porcelain | grep -q "package.json"; then
-              git add package.json || true
-              git --no-pager diff --name-only HEAD || true
-            fi
+            # If script changed package.json, show diff
+            git --no-pager diff --name-only || true
           else
             echo "Helper script not found; skipping"
           fi
 
-      - name: Determine project directory
-        id: find_proj
+      - name: Set PROJECT_DIR explicitly (Variant C)
         run: |
-          set -e
-          # Prefer explicit folder if present
-          if [ -d "IcutechTestApi" ]; then
-            echo "Found explicit directory: IcutechTestApi"
-            echo "PROJECT_DIR=IcutechTestApi" >> $GITHUB_ENV
-            exit 0
-          fi
+          echo "Setting PROJECT_DIR to IcutechTestApi/wwwroot (explicit variant C)"
+          echo "PROJECT_DIR=IcutechTestApi/wwwroot" >> $GITHUB_ENV
 
-          # Try to find a folder containing Dockerfile, .csproj, or package.json (search depth 4)
-          PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | sort -u | head -n1 || true)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "No Dockerfile, .csproj or package.json found in repo (up to depth 4). Listing top-level files for debug:"
-            ls -la
-            echo "ERROR: Could not auto-detect project directory. If your project folder has a different name or is deeper, update the workflow to set PROJECT_DIR explicitly." >&2
+      - name: Verify PROJECT_DIR exists
+        run: |
+          echo "PROJECT_DIR=${PROJECT_DIR:-<not set>}"
+          if [ -z "${PROJECT_DIR:-}" ]; then
+            echo "ERROR: PROJECT_DIR is not set" >&2
             exit 1
           fi
-          PROJECT_DIR="${PROJECT_DIR#./}"
-          echo "Found project dir: $PROJECT_DIR"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-
-      - name: Debug show project dir
-        run: |
-          echo "PROJECT_DIR = ${PROJECT_DIR:-<not set>}"
+          if [ ! -d "${PROJECT_DIR}" ]; then
+            echo "ERROR: Project directory '${PROJECT_DIR}' does not exist!"
+            echo "Listing repository root for debugging:"
+            ls -la
+            echo ""
+            echo "If this folder should exist but is not tracked in git (e.g. only node_modules), ensure you committed the relevant files (package.json, source files) or add a placeholder .gitkeep into the directory."
+            exit 1
+          fi
+          echo "Project directory found: ${PROJECT_DIR}"
           ls -la "${PROJECT_DIR}" || true
 
       - name: Build project (if Node) and Deploy to Railway (non-interactive)
@@ -108,6 +102,8 @@ jobs:
             else
               echo "No build script defined — skipping npm run build"
             fi
+          else
+            echo "No package.json found in ${PROJECT_DIR} — skipping npm build steps"
           fi
 
           echo "Running railway up in $(pwd)"

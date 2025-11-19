@@ -122,25 +122,35 @@ jobs:
           npm install
           npx playwright install --with-deps
 
+      - name: Check if API project exists
+        id: check_api
+        run: |
+          if [ -d "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR"/*.csproj ] 2>/dev/null; then
+            CSPROJ_FILE=$(find "$PROJECT_DIR" -maxdepth 1 -name "*.csproj" ! -name "*Tests*" | head -n1)
+            if [ -n "$CSPROJ_FILE" ] && [ -f "$CSPROJ_FILE" ]; then
+              echo "API project found: $CSPROJ_FILE"
+              echo "api_exists=true" >> $GITHUB_OUTPUT
+            else
+              echo "API project directory exists but no .csproj file found"
+              echo "api_exists=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "API project directory '$PROJECT_DIR' does not exist"
+            echo "api_exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build API
+        if: steps.check_api.outputs.api_exists == 'true'
         run: |
           set -e
-          if [ ! -d "$PROJECT_DIR" ]; then
-            echo "::error::Project directory '$PROJECT_DIR' does not exist. Please ensure the IcutechTestApi directory is committed to the repository." >&2
-            exit 1
-          fi
           cd "$PROJECT_DIR"
           echo "Building API in directory: $(pwd)"
           CSPROJ_FILE=$(find . -maxdepth 1 -name "*.csproj" ! -name "*Tests*" | head -n1)
-          if [ -n "$CSPROJ_FILE" ] && [ -f "$CSPROJ_FILE" ]; then
-            dotnet restore
-            dotnet build --configuration Release
-          else
-            echo "::error::No .csproj file found in $PROJECT_DIR. Please ensure the main API project is present in the repository." >&2
-            exit 1
-          fi
+          dotnet restore
+          dotnet build --configuration Release
 
       - name: Build Frontend
+        if: steps.check_api.outputs.api_exists == 'true'
         run: |
           set -e
           # Determine the API project directory (not Tests)
@@ -167,7 +177,14 @@ jobs:
             echo "Frontend directory $FRONTEND_DIR does not exist, skipping frontend build"
           fi
 
+      - name: Warn about missing API project
+        if: steps.check_api.outputs.api_exists == 'false'
+        run: |
+          echo "::warning::API project directory '$PROJECT_DIR' is missing. E2E tests require a running API server. Please ensure the IcutechTestApi directory is committed to the repository." >&2
+          echo "Skipping API build and frontend build steps. E2E tests will likely fail without a running API server."
+
       - name: Run E2E tests
+        if: steps.check_api.outputs.api_exists == 'true'
         run: |
           cd tests/e2e
           npm test
@@ -175,6 +192,12 @@ jobs:
           FRONTEND_URL: http://localhost:5030
           API_URL: http://localhost:5030
           PROJECT_DIR: ${{ env.PROJECT_DIR }}
+
+      - name: Skip E2E tests (API project missing)
+        if: steps.check_api.outputs.api_exists == 'false'
+        run: |
+          echo "::error::Cannot run E2E tests: API project directory '$PROJECT_DIR' is missing. Please ensure the IcutechTestApi directory is committed to the repository." >&2
+          exit 1
 
       - name: Upload test results
         if: always()

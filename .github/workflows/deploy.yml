@@ -22,5 +22,4 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           # railway will read RAILWAY_TOKEN from the environment
-          # run whatever railway commands you need (example: up)
-          railway up --yes
+          railway up

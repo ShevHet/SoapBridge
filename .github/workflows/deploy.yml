@@ -28,17 +28,15 @@ jobs:
             echo "FRONTEND_DIR=wwwroot" >> $GITHUB_ENV
             exit 0
           fi
-          
+
           # Find a folder that contains package.json (search depth 6)
           FRONTEND_DIR=$(find . -maxdepth 6 -type f -name "package.json" -printf '%h\n' | sort -u | head -n1 || true)
-          
           if [ -z "$FRONTEND_DIR" ]; then
             echo "No wwwroot or package.json found (searched depth 6). Listing top-level files for debug:" >&2
             ls -la
             echo "::error::Could not detect frontend directory. If your frontend folder has a different name or is deeper, set FRONTEND_DIR in the workflow." >&2
             exit 1
           fi
-          
           FRONTEND_DIR="${FRONTEND_DIR#./}"
           echo "Found frontend dir: $FRONTEND_DIR"
           echo "FRONTEND_DIR=$FRONTEND_DIR" >> $GITHUB_ENV
@@ -125,17 +123,15 @@ jobs:
             echo "PROJECT_DIR=IcutechTestApi" >> $GITHUB_ENV
             exit 0
           fi
-          
+
           # Otherwise detect by Dockerfile, .csproj or package.json (search depth 4)
           PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | sort -u | head -n1 || true)
-          
           if [ -z "$PROJECT_DIR" ]; then
             echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files for debug:" >&2
             ls -la
             echo "::error::Could not auto-detect project directory for railway. Set PROJECT_DIR manually in the workflow." >&2
             exit 1
           fi
-          
           PROJECT_DIR="${PROJECT_DIR#./}"
           echo "Found project dir: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV

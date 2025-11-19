@@ -8,6 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,10 +25,14 @@ jobs:
           dotnet restore
           dotnet build --configuration Release
       
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      - name: Login to Railway
+        run: railway login --token "$RAILWAY_TOKEN"
+      
       - name: Deploy to Railway
-        uses: bervProject/railway-deploy@main
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: icutech-test-api
-          dockerfile_path: IcutechTestApi/Dockerfile
+        run: |
+          cd IcutechTestApi
+          railway up --yes --service icutech-test-api
 

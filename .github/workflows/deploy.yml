@@ -6,96 +6,138 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build_frontend:
+    name: Build frontend (auto-detect)
     runs-on: ubuntu-latest
-    env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Show repo root (debug)
         run: |
-          echo "Repo root contents:"
+          echo "Repository root:"
           ls -la
-          echo "Searching for project files..."
-          find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) | head -20
-      
-      - name: Auto-detect project directory
-        id: detect-project
+
+      - name: Determine frontend directory
+        id: find_frontend
         run: |
           set -e
-          # Prefer explicit folder if exists and contains project files
-          if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
-            echo "Found explicit directory: IcutechTestApi"
-            PROJECT_DIR="IcutechTestApi"
-          else
-            # Detect by Dockerfile, .csproj or package.json (depth 4)
-            # Exclude node_modules, bin, obj directories
-            PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | grep -v node_modules | grep -v bin | grep -v obj | grep -v Tests | sort -u | head -n1 || true)
-            
-            if [ -z "$PROJECT_DIR" ]; then
-              echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files:" >&2
-              ls -la
-              echo "::error::Could not auto-detect project directory. Set PROJECT_DIR manually in the workflow." >&2
-              exit 1
-            fi
-            
-            PROJECT_DIR="${PROJECT_DIR#./}"
+          # Prefer explicit wwwroot at repo root
+          if [ -d "wwwroot" ]; then
+            echo "Found wwwroot at repo root"
+            echo "FRONTEND_DIR=wwwroot" >> $GITHUB_ENV
+            exit 0
           fi
           
+          # Find a folder that contains package.json (search depth 6)
+          FRONTEND_DIR=$(find . -maxdepth 6 -type f -name "package.json" -printf '%h\n' | sort -u | head -n1 || true)
+          
+          if [ -z "$FRONTEND_DIR" ]; then
+            echo "No wwwroot or package.json found (searched depth 6). Listing top-level files for debug:" >&2
+            ls -la
+            echo "::error::Could not detect frontend directory. If your frontend folder has a different name or is deeper, set FRONTEND_DIR in the workflow." >&2
+            exit 1
+          fi
+          
+          FRONTEND_DIR="${FRONTEND_DIR#./}"
+          echo "Found frontend dir: $FRONTEND_DIR"
+          echo "FRONTEND_DIR=$FRONTEND_DIR" >> $GITHUB_ENV
+
+      - name: Debug show frontend dir
+        run: |
+          echo "FRONTEND_DIR = ${FRONTEND_DIR:-<not set>}"
+          ls -la "${FRONTEND_DIR}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies and build frontend (if applicable)
+        run: |
+          set -e
+          cd "${FRONTEND_DIR}"
+          echo "Working in $(pwd)"
+          # Prefer npm ci when package-lock.json present; install production deps only
+          if [ -f package-lock.json ]; then
+            npm ci --omit=dev
+          else
+            npm install --omit=dev
+          fi
+          # Run build if script exists, otherwise try to run 'build' or skip gracefully
+          if npm run | grep -q " build"; then
+            npm run build
+          else
+            echo "No build script found. Skipping build step."
+          fi
+
+  deploy_railway:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    needs: build_frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show repo root (debug)
+        run: ls -la
+
+      - name: Install Railway CLI
+        run: curl -sL https://railway.app/install.sh | sh
+
+      - name: Show Railway version (debug)
+        run: railway --version || true
+
+      - name: Ensure RAILWAY_TOKEN is present
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "ERROR: RAILWAY_TOKEN secret is NOT set. Please add it in Settings → Secrets and variables → Actions" >&2
+            exit 1
+          fi
+          echo "RAILWAY_TOKEN present (value hidden)"
+
+      - name: Determine project directory for railway (auto-detect)
+        id: find_proj
+        run: |
+          set -e
+          # Prefer explicit folder if it exists
+          if [ -d "IcutechTestApi" ]; then
+            echo "Found explicit directory: IcutechTestApi"
+            echo "PROJECT_DIR=IcutechTestApi" >> $GITHUB_ENV
+            exit 0
+          fi
+          
+          # Otherwise detect by Dockerfile, .csproj or package.json (search depth 4)
+          PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | sort -u | head -n1 || true)
+          
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files for debug:" >&2
+            ls -la
+            echo "::error::Could not auto-detect project directory for railway. Set PROJECT_DIR manually in the workflow." >&2
+            exit 1
+          fi
+          
+          PROJECT_DIR="${PROJECT_DIR#./}"
           echo "Found project dir: $PROJECT_DIR"
-          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-      
+
       - name: Debug show project dir
         run: |
           echo "PROJECT_DIR = ${PROJECT_DIR:-<not set>}"
-          if [ -d "$PROJECT_DIR" ]; then
-            echo "Directory exists. Contents:"
-            ls -la "$PROJECT_DIR" | head -20
-          else
-            echo "::error::Project directory '$PROJECT_DIR' does not exist!"
-            exit 1
-          fi
-      
-      - name: Add start script to package.json if needed
-        run: |
-          chmod +x .github/scripts/add-start-script.sh
-          .github/scripts/add-start-script.sh
-      
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-      
-      - name: Build project
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-          echo "Building in directory: $(pwd)"
-          if [ -f "*.csproj" ] || [ -f "IcutechTestApi.csproj" ]; then
-            dotnet restore
-            dotnet build --configuration Release
-          else
-            echo "No .csproj file found in $PROJECT_DIR, skipping build"
-          fi
-      
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-      
-      - name: Debug - Railway CLI version
-        run: railway --version
-      
-      - name: Login to Railway
-        run: railway login --token "$RAILWAY_TOKEN"
-      
-      - name: Debug - Railway status
-        run: railway status || echo "Railway status check completed (may fail if not linked)"
-      
-      - name: Deploy to Railway
+          ls -la "${PROJECT_DIR}"
+
+      - name: Deploy to Railway (non-interactive)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          # Optional: set RAILWAY_PROJECT or RAILWAY_ENV here if needed
+          # RAILWAY_PROJECT: ${{ secrets.RAILWAY_PROJECT }}
+          # RAILWAY_ENV: production
         run: |
           set -e
           cd "$PROJECT_DIR"
           echo "Running railway up in $(pwd)"
-          railway up --yes
+          # DO NOT call `railway login --token` — the CLI won't accept --token. Provide token via env.
+          # railway reads RAILWAY_TOKEN from the environment in CI.
+          railway up

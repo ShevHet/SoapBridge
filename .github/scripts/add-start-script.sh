@@ -12,64 +12,28 @@ fi
 
 echo "Found package.json at: $PKG_PATH"
 
-# Check if scripts.start already exists
-if grep -q '"start"' "$PKG_PATH" 2>/dev/null; then
-  echo "package.json already has a 'start' script. Skipping."
-  exit 0
-fi
+# Use node to safely edit JSON (keeps formatting minimal)
+node -e '
+const fs = require("fs");
+const p = process.argv[1];
+const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+if (!pkg.scripts) pkg.scripts = {};
+if (!pkg.scripts.start) {
+  if (pkg.main) {
+    pkg.scripts.start = "node " + pkg.main;
+  } else if (pkg.scripts.dev) {
+    pkg.scripts.start = "npm run dev";
+  } else if (pkg.scripts.build) {
+    pkg.scripts.start = "npm run build && node dist/index.js";
+  } else {
+    pkg.scripts.start = "node index.js";
+  }
+  fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
+  console.log("Added start script to " + p + " -> " + pkg.scripts.start);
+} else {
+  console.log("start script already present in " + p + " -> " + pkg.scripts.start);
+}
+' "$PKG_PATH"
 
-# Determine the directory containing package.json
-PKG_DIR=$(dirname "$PKG_PATH")
-
-# Read package.json and check for heuristics
-HAS_MAIN=$(grep -q '"main"' "$PKG_PATH" 2>/dev/null && echo "yes" || echo "no")
-HAS_DEV=$(grep -q '"dev"' "$PKG_PATH" 2>/dev/null && echo "yes" || echo "no")
-HAS_BUILD=$(grep -q '"build"' "$PKG_PATH" 2>/dev/null && echo "yes" || echo "no")
-
-# Determine start script based on heuristics
-START_SCRIPT=""
-if [ "$HAS_MAIN" = "yes" ]; then
-  MAIN_FILE=$(grep '"main"' "$PKG_PATH" | sed -E 's/.*"main"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-  START_SCRIPT="node $MAIN_FILE"
-elif [ "$HAS_DEV" = "yes" ]; then
-  START_SCRIPT="npm run dev"
-elif [ "$HAS_BUILD" = "yes" ]; then
-  START_SCRIPT="npm run build && node dist/index.js"
-else
-  START_SCRIPT="node index.js"
-fi
-
-echo "Adding start script: $START_SCRIPT"
-
-# Use Node.js or Python to safely modify JSON
-if command -v node >/dev/null 2>&1; then
-  node -e "
-    const fs = require('fs');
-    const pkg = JSON.parse(fs.readFileSync('$PKG_PATH', 'utf8'));
-    if (!pkg.scripts) pkg.scripts = {};
-    if (!pkg.scripts.start) {
-      pkg.scripts.start = '$START_SCRIPT';
-      fs.writeFileSync('$PKG_PATH', JSON.stringify(pkg, null, 2) + '\n');
-      console.log('Added start script to package.json');
-    }
-  "
-elif command -v python3 >/dev/null 2>&1; then
-  python3 -c "
-import json
-import sys
-with open('$PKG_PATH', 'r') as f:
-    pkg = json.load(f)
-if 'scripts' not in pkg:
-    pkg['scripts'] = {}
-if 'start' not in pkg['scripts']:
-    pkg['scripts']['start'] = '$START_SCRIPT'
-    with open('$PKG_PATH', 'w') as f:
-        json.dump(pkg, f, indent=2)
-        f.write('\n')
-    print('Added start script to package.json')
-"
-else
-  echo "Error: Neither node nor python3 found. Cannot modify package.json safely."
-  exit 1
-fi
-
+# Make the script executable (when added to repo)
+chmod +x .github/scripts/add-start-script.sh || true

@@ -1,0 +1,24 @@
+services:  
+  - type: web
+    name: soapbridge-api
+    env: dotnet
+    region: frankfurt
+    plan: free
+    branch: main
+    
+    rootDir: IcutechTestApi
+    
+    buildCommand: |
+      cd wwwroot && npm install && npm run build:prod && cd .. &&
+      dotnet restore &&
+      dotnet publish -c Release -o out
+    
+    startCommand: dotnet out/IcutechTestApi.dll --urls http://0.0.0.0:$PORT
+    
+    envVars:
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: SoapService__Url
+        value: http://isapi.mekashron.com/icu-tech/icutech-test.dll
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production

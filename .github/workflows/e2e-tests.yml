@@ -73,13 +73,13 @@ jobs:
       - name: Build Frontend
         run: |
           set -e
-          cd "$PROJECT_DIR/wwwroot"
+          cd "$PROJECT_DIR/IcutechTestApi.Tests"
           echo "Building frontend in directory: $(pwd)"
           if [ -f "package.json" ]; then
             npm install
             npm run build:prod
           else
-            echo "No package.json found in $PROJECT_DIR/wwwroot, skipping frontend build"
+            echo "No package.json found in $PROJECT_DIR/IcutechTestApi.Tests, skipping frontend build"
           fi
 
       - name: Run E2E tests

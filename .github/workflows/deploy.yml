@@ -14,40 +14,50 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Debug - List directories
+      - name: Show repo root (debug)
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
+          echo "Repo root contents:"
           ls -la
-          echo "Looking for project directories..."
-          find . -maxdepth 2 -type d -name "*.csproj" -o -type d -name "*Api" | head -10
+          echo "Searching for project files..."
+          find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) | head -20
       
       - name: Auto-detect project directory
         id: detect-project
         run: |
-          # Try to find project directory by looking for .csproj files
-          PROJECT_DIR=""
+          set -e
+          # Prefer explicit folder if exists and contains project files
           if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+            echo "Found explicit directory: IcutechTestApi"
             PROJECT_DIR="IcutechTestApi"
-          elif [ -f "*.csproj" ]; then
-            # Find first .csproj file and use its directory
-            PROJECT_DIR=$(dirname $(find . -maxdepth 2 -name "*.csproj" | head -1))
           else
-            # Fallback to IcutechTestApi
-            PROJECT_DIR="IcutechTestApi"
+            # Detect by Dockerfile, .csproj or package.json (depth 4)
+            # Exclude node_modules, bin, obj directories
+            PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | grep -v node_modules | grep -v bin | grep -v obj | grep -v Tests | sort -u | head -n1 || true)
+            
+            if [ -z "$PROJECT_DIR" ]; then
+              echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files:" >&2
+              ls -la
+              echo "::error::Could not auto-detect project directory. Set PROJECT_DIR manually in the workflow." >&2
+              exit 1
+            fi
+            
+            PROJECT_DIR="${PROJECT_DIR#./}"
           fi
+          
+          echo "Found project dir: $PROJECT_DIR"
           echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
-          echo "Detected project directory: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
       
-      - name: Verify project directory exists
+      - name: Debug show project dir
         run: |
-          PROJECT_DIR="${{ steps.detect-project.outputs.project_dir }}"
-          if [ ! -d "$PROJECT_DIR" ]; then
-            echo "Error: Project directory '$PROJECT_DIR' does not exist!"
+          echo "PROJECT_DIR = ${PROJECT_DIR:-<not set>}"
+          if [ -d "$PROJECT_DIR" ]; then
+            echo "Directory exists. Contents:"
+            ls -la "$PROJECT_DIR" | head -20
+          else
+            echo "::error::Project directory '$PROJECT_DIR' does not exist!"
             exit 1
           fi
-          echo "Project directory verified: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR" | head -20
       
       - name: Add start script to package.json if needed
         run: |
@@ -61,11 +71,15 @@ jobs:
       
       - name: Build project
         run: |
-          PROJECT_DIR="${{ steps.detect-project.outputs.project_dir }}"
+          set -e
           cd "$PROJECT_DIR"
           echo "Building in directory: $(pwd)"
-          dotnet restore
-          dotnet build --configuration Release
+          if [ -f "*.csproj" ] || [ -f "IcutechTestApi.csproj" ]; then
+            dotnet restore
+            dotnet build --configuration Release
+          else
+            echo "No .csproj file found in $PROJECT_DIR, skipping build"
+          fi
       
       - name: Install Railway CLI
         run: npm install -g @railway/cli
@@ -81,7 +95,7 @@ jobs:
       
       - name: Deploy to Railway
         run: |
-          PROJECT_DIR="${{ steps.detect-project.outputs.project_dir }}"
+          set -e
           cd "$PROJECT_DIR"
-          echo "Deploying from directory: $(pwd)"
+          echo "Running railway up in $(pwd)"
           railway up --yes

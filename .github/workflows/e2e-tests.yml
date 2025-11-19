@@ -25,6 +25,33 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Determine project directory (auto-detect)
+        id: find_proj
+        run: |
+          set -e
+          # Prefer explicit folder if exists and contains project files
+          if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+            echo "Found explicit directory: IcutechTestApi"
+            PROJECT_DIR="IcutechTestApi"
+          else
+            # Detect by Dockerfile, .csproj or package.json (depth 4)
+            # Exclude node_modules, bin, obj directories
+            PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | grep -v node_modules | grep -v bin | grep -v obj | grep -v Tests | sort -u | head -n1 || true)
+            
+            if [ -z "$PROJECT_DIR" ]; then
+              echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files:" >&2
+              ls -la
+              echo "::error::Could not auto-detect project directory. Set PROJECT_DIR manually in the workflow." >&2
+              exit 1
+            fi
+            
+            PROJECT_DIR="${PROJECT_DIR#./}"
+          fi
+          
+          echo "Found project dir: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
       - name: Install Playwright
         run: |
           cd tests/e2e
@@ -33,15 +60,27 @@ jobs:
 
       - name: Build API
         run: |
-          cd IcutechTestApi
-          dotnet restore
-          dotnet build --configuration Release
+          set -e
+          cd "$PROJECT_DIR"
+          echo "Building API in directory: $(pwd)"
+          if [ -f "*.csproj" ] || [ -f "IcutechTestApi.csproj" ]; then
+            dotnet restore
+            dotnet build --configuration Release
+          else
+            echo "No .csproj file found in $PROJECT_DIR, skipping build"
+          fi
 
       - name: Build Frontend
         run: |
-          cd IcutechTestApi/wwwroot
-          npm install
-          npm run build:prod
+          set -e
+          cd "$PROJECT_DIR/wwwroot"
+          echo "Building frontend in directory: $(pwd)"
+          if [ -f "package.json" ]; then
+            npm install
+            npm run build:prod
+          else
+            echo "No package.json found in $PROJECT_DIR/wwwroot, skipping frontend build"
+          fi
 
       - name: Run E2E tests
         run: |

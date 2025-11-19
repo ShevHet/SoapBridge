@@ -43,39 +43,58 @@ jobs:
               PROJECT_DIR=$(find . -maxdepth 4 -type f -name "Dockerfile" ! -path "*/Tests/*" ! -path "*/bin/*" ! -path "*/obj/*" ! -path "*/node_modules/*" -printf '%h\n' | sort -u | head -n1 || true)
             fi
             
+            # If still not found, try to extract from test project's ProjectReference
+            if [ -z "$PROJECT_DIR" ] && [ -f "IcutechTestApi.Tests/IcutechTestApi.Tests.csproj" ]; then
+              echo "Trying to extract project path from test project's ProjectReference..."
+              # Look for ProjectReference in the test .csproj file
+              REF_PATH=$(grep -oP 'ProjectReference Include="\.\.\\\K[^"]+' "IcutechTestApi.Tests/IcutechTestApi.Tests.csproj" | head -n1 || true)
+              if [ -n "$REF_PATH" ]; then
+                # Convert Windows path to Unix path
+                REF_PATH=$(echo "$REF_PATH" | tr '\\' '/')
+                if [ -d "$REF_PATH" ] && [ -f "$REF_PATH"/*.csproj ]; then
+                  PROJECT_DIR="$REF_PATH"
+                  echo "Found project directory from ProjectReference: $PROJECT_DIR"
+                fi
+              fi
+            fi
+            
             if [ -z "$PROJECT_DIR" ]; then
               echo "No .csproj or Dockerfile found (excluding Tests directories). Listing files:" >&2
               find . -maxdepth 2 -type f -name "*.csproj" -o -name "Dockerfile" | head -10
               ls -la
-              echo "::error::Could not auto-detect project directory. Set PROJECT_DIR manually in the workflow." >&2
-              exit 1
-            fi
-            
-            PROJECT_DIR="${PROJECT_DIR#./}"
-            
-            # Verify that the directory contains a .csproj file (not just Dockerfile)
-            # If PROJECT_DIR is '.' and it doesn't contain a .csproj, try to find IcutechTestApi
-            if [ "$PROJECT_DIR" = "." ]; then
-              # Check if root contains any .csproj files (excluding Tests)
-              CSPROJ_COUNT=$(find . -maxdepth 1 -type f -name "*.csproj" ! -name "*Tests*" 2>/dev/null | wc -l)
-              if [ "$CSPROJ_COUNT" -eq 0 ]; then
-                echo "Root directory does not contain .csproj, checking for IcutechTestApi directory..."
-                if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
-                  PROJECT_DIR="IcutechTestApi"
-                  echo "Using IcutechTestApi directory instead"
-                else
-                  echo "Warning: Root directory does not contain a .csproj file and IcutechTestApi directory not found"
-                fi
-              fi
+              echo "::error::Could not auto-detect project directory. The IcutechTestApi directory appears to be missing from the repository. Please ensure the main API project is committed to the repository." >&2
+              # Set to IcutechTestApi as default - build will fail later with a clearer error
+              PROJECT_DIR="IcutechTestApi"
             else
-              # For non-root directories, verify .csproj exists
-              CSPROJ_COUNT=$(find "$PROJECT_DIR" -maxdepth 1 -type f -name "*.csproj" ! -name "*Tests*" 2>/dev/null | wc -l)
-              if [ "$CSPROJ_COUNT" -eq 0 ]; then
-                echo "Warning: Directory $PROJECT_DIR does not contain a .csproj file"
-                # Try fallback to IcutechTestApi if it exists
-                if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
-                  PROJECT_DIR="IcutechTestApi"
-                  echo "Falling back to IcutechTestApi directory"
+              PROJECT_DIR="${PROJECT_DIR#./}"
+              
+              # Verify that the directory contains a .csproj file (not just Dockerfile)
+              # If PROJECT_DIR is '.' and it doesn't contain a .csproj, try to find IcutechTestApi
+              if [ "$PROJECT_DIR" = "." ]; then
+                # Check if root contains any .csproj files (excluding Tests)
+                CSPROJ_COUNT=$(find . -maxdepth 1 -type f -name "*.csproj" ! -name "*Tests*" 2>/dev/null | wc -l)
+                if [ "$CSPROJ_COUNT" -eq 0 ]; then
+                  echo "Root directory does not contain .csproj, checking for IcutechTestApi directory..."
+                  if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+                    PROJECT_DIR="IcutechTestApi"
+                    echo "Using IcutechTestApi directory instead"
+                  else
+                    echo "Warning: Root directory does not contain a .csproj file and IcutechTestApi directory not found"
+                    PROJECT_DIR="IcutechTestApi"
+                  fi
+                fi
+              else
+                # For non-root directories, verify .csproj exists
+                CSPROJ_COUNT=$(find "$PROJECT_DIR" -maxdepth 1 -type f -name "*.csproj" ! -name "*Tests*" 2>/dev/null | wc -l)
+                if [ "$CSPROJ_COUNT" -eq 0 ]; then
+                  echo "Warning: Directory $PROJECT_DIR does not contain a .csproj file"
+                  # Try fallback to IcutechTestApi if it exists
+                  if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+                    PROJECT_DIR="IcutechTestApi"
+                    echo "Falling back to IcutechTestApi directory"
+                  else
+                    PROJECT_DIR="IcutechTestApi"
+                  fi
                 fi
               fi
             fi
@@ -88,8 +107,8 @@ jobs:
               PROJECT_DIR="IcutechTestApi"
               echo "Correcting to IcutechTestApi directory"
             else
-              echo "Error: Cannot find IcutechTestApi directory to use instead of Tests directory"
-              exit 1
+              echo "Warning: Cannot find IcutechTestApi directory, using it as default (build will fail if missing)"
+              PROJECT_DIR="IcutechTestApi"
             fi
           fi
           
@@ -106,13 +125,19 @@ jobs:
       - name: Build API
         run: |
           set -e
+          if [ ! -d "$PROJECT_DIR" ]; then
+            echo "::error::Project directory '$PROJECT_DIR' does not exist. Please ensure the IcutechTestApi directory is committed to the repository." >&2
+            exit 1
+          fi
           cd "$PROJECT_DIR"
           echo "Building API in directory: $(pwd)"
-          if [ -f "*.csproj" ] || [ -f "IcutechTestApi.csproj" ]; then
+          CSPROJ_FILE=$(find . -maxdepth 1 -name "*.csproj" ! -name "*Tests*" | head -n1)
+          if [ -n "$CSPROJ_FILE" ] && [ -f "$CSPROJ_FILE" ]; then
             dotnet restore
             dotnet build --configuration Release
           else
-            echo "No .csproj file found in $PROJECT_DIR, skipping build"
+            echo "::error::No .csproj file found in $PROJECT_DIR. Please ensure the main API project is present in the repository." >&2
+            exit 1
           fi
 
       - name: Build Frontend

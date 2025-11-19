@@ -11,11 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Deploy to Railway
-        uses: railwayapp/railway-action@v2
+        uses: railwayapp/actions/deploy@v1
         with:
-          token: ${{ secrets.RAILWAY_TOKEN }}
           service: icutech-test-api
-          rootDirectory: IcutechTestApi
+          token: ${{ secrets.RAILWAY_TOKEN }}
+          rootDirectory: ./IcutechTestApi
+          build: .

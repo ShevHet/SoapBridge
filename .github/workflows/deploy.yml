@@ -19,7 +19,7 @@ jobs:
           echo "Add your Render steps here if needed"
 
   deploy_railway:
-    name: Deploy to Railway (explicit PROJECT_DIR = IcutechTestApi/wwwroot)
+    name: Deploy to Railway (explicit PROJECT_DIR = IcutechTestApi.Tests)
     runs-on: ubuntu-latest
     needs: deploy_render
     steps:
@@ -59,8 +59,8 @@ jobs:
 
       - name: Set PROJECT_DIR explicitly (Variant C)
         run: |
-          echo "Setting PROJECT_DIR to IcutechTestApi/wwwroot (explicit variant C)"
-          echo "PROJECT_DIR=IcutechTestApi/wwwroot" >> $GITHUB_ENV
+          echo "Setting PROJECT_DIR to IcutechTestApi.Tests (explicit variant C)"
+          echo "PROJECT_DIR=IcutechTestApi.Tests" >> $GITHUB_ENV
 
       - name: Verify PROJECT_DIR exists
         run: |

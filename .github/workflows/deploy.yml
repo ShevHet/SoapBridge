@@ -14,14 +14,13 @@ jobs:
       - name: Install Railway CLI
         run: curl -sL https://railway.app/install.sh | sh
 
-      - name: Railway login (CI)
+      - name: Show Railway version (debug)
+        run: railway --version
+
+      - name: Deploy to Railway (no interactive login)
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          # use CI login so the CLI reads the token from the env
-          railway login --ci
-
-      - name: Deploy to Railway
-        run: |
-          # any subsequent railway commands
-          railway up
+          # railway will read RAILWAY_TOKEN from the environment
+          # run whatever railway commands you need (example: up)
+          railway up --yes

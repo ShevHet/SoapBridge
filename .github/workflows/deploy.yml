@@ -2,28 +2,20 @@ name: Deploy to Railway
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-      
+
       - name: Deploy to Railway
-        working-directory: IcutechTestApi
-        # PLACEHOLDER: Замените 'icutech-test-api' на реальное имя вашего сервиса в Railway
-        # Имя сервиса можно найти в Railway Dashboard → Ваш проект → Settings → Service Name
-        run: railway up --service icutech-test-api --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        uses: railwayapp/railway-action@v2
+        with:
+          token: ${{ secrets.RAILWAY_TOKEN }}
+          service: icutech-test-api
+          rootDirectory: IcutechTestApi

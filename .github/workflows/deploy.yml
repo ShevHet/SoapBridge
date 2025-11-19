@@ -12,10 +12,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Deploy to Railway
-        uses: railwayapp/railway-action@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          token: ${{ secrets.RAILWAY_TOKEN }}
-          serviceName: icutech-test-api
-          rootDirectory: IcutechTestApi
-
+          node-version: '20'
+      
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      - name: Deploy to Railway
+        working-directory: IcutechTestApi
+        # PLACEHOLDER: Замените 'icutech-test-api' на реальное имя вашего сервиса в Railway
+        # Имя сервиса можно найти в Railway Dashboard → Ваш проект → Settings → Service Name
+        run: railway up --service icutech-test-api --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

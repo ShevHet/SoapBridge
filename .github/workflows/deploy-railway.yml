@@ -24,7 +24,7 @@ jobs:
           dotnet build --configuration Release
       
       - name: Deploy to Railway
-        uses: bervProject/railway-deploy@v0.2.2
+        uses: bervProject/railway-deploy@main
         with:
           railway_token: ${{ secrets.RAILWAY_TOKEN }}
           service: icutech-test-api

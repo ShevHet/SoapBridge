@@ -6,98 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_frontend:
-    name: Build frontend (auto-detect)
+  deploy_render:
+    name: Deploy to Render
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show repo root (debug)
+      # Placeholder Render deployment steps — keep or replace with your Render steps
+      - name: Build and deploy to Render (placeholder)
         run: |
-          echo "Repository root:"
-          ls -la
-
-      - name: Determine frontend directory
-        id: find_frontend
-        run: |
-          set -e
-          # Prefer explicit wwwroot at repo root
-          if [ -d "wwwroot" ]; then
-            echo "Found wwwroot at repo root"
-            echo "FRONTEND_DIR=wwwroot" >> $GITHUB_ENV
-            exit 0
-          fi
-          
-          # Find a folder that contains package.json (search depth 6)
-          FRONTEND_DIR=$(find . -maxdepth 6 -type f -name "package.json" -printf '%h\n' | sort -u | head -n1 || true)
-          
-          if [ -z "$FRONTEND_DIR" ]; then
-            echo "No wwwroot or package.json found (searched depth 6). Listing top-level files for debug:" >&2
-            ls -la
-            echo "::error::Could not detect frontend directory. If your frontend folder has a different name or is deeper, set FRONTEND_DIR in the workflow." >&2
-            exit 1
-          fi
-          
-          FRONTEND_DIR="${FRONTEND_DIR#./}"
-          echo "Found frontend dir: $FRONTEND_DIR"
-          echo "FRONTEND_DIR=$FRONTEND_DIR" >> $GITHUB_ENV
-
-      - name: Debug show frontend dir
-        run: |
-          echo "FRONTEND_DIR = ${FRONTEND_DIR:-<not set>}"
-          ls -la "${FRONTEND_DIR}"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Ensure npm scripts exist (may modify package.json)
-        run: |
-          if [ -f ".github/scripts/ensure-npm-scripts.sh" ]; then
-            bash .github/scripts/ensure-npm-scripts.sh
-            git --no-pager diff --name-only || true
-          else
-            echo "Helper script not found; skipping"
-          fi
-
-      - name: Install dependencies and build frontend (if applicable)
-        run: |
-          set -e
-          cd "${FRONTEND_DIR}"
-          echo "Working in $(pwd)"
-
-          if [ -f package-lock.json ]; then
-            npm ci --omit=dev
-          else
-            npm install --omit=dev
-          fi
-
-          # only run build if script exists in npm run list
-          if npm run | grep -q " build"; then
-            echo "Found build script — running npm run build"
-            npm run build
-          else
-            echo "::warning::No 'build' script found in package.json; skipping build step."
-            echo "Available scripts:"
-            npm run || true
-          fi
+          echo "Add your Render steps here if needed"
 
   deploy_railway:
     name: Deploy to Railway
     runs-on: ubuntu-latest
-    needs: build_frontend
+    needs: deploy_render
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Show repo root (debug)
-        run: |
-          echo "Repository root:"
-          ls -la
-          echo "Top-level folders:"
-          ls -1
+        run: ls -la
 
       - name: Install Railway CLI
         run: curl -sL https://railway.app/install.sh | sh
@@ -115,24 +45,37 @@ jobs:
           fi
           echo "RAILWAY_TOKEN present (value hidden)"
 
-      - name: Determine project directory for railway (auto-detect)
+      - name: Ensure package.json has start/build scripts (if applicable)
+        run: |
+          if [ -f ".github/scripts/add-start-build-scripts.sh" ]; then
+            bash .github/scripts/add-start-build-scripts.sh
+            # Stage changed package.json so it can be used in subsequent steps
+            if git status --porcelain | grep -q "package.json"; then
+              git add package.json || true
+              git --no-pager diff --name-only HEAD || true
+            fi
+          else
+            echo "Helper script not found; skipping"
+          fi
+
+      - name: Determine project directory
         id: find_proj
         run: |
           set -e
-          # Prefer explicit folder if it exists
+          # Prefer explicit folder if present
           if [ -d "IcutechTestApi" ]; then
             echo "Found explicit directory: IcutechTestApi"
             echo "PROJECT_DIR=IcutechTestApi" >> $GITHUB_ENV
             exit 0
           fi
-          
-          # Otherwise detect by Dockerfile, .csproj or package.json (search depth 4)
+
+          # Try to find a folder containing Dockerfile, .csproj, or package.json (search depth 4)
           PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | sort -u | head -n1 || true)
           
           if [ -z "$PROJECT_DIR" ]; then
-            echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files for debug:" >&2
+            echo "No Dockerfile, .csproj or package.json found in repo (up to depth 4). Listing top-level files for debug:"
             ls -la
-            echo "::error::Could not auto-detect project directory for railway. Set PROJECT_DIR manually in the workflow." >&2
+            echo "ERROR: Could not auto-detect project directory. If your project folder has a different name or is deeper, update the workflow to set PROJECT_DIR explicitly." >&2
             exit 1
           fi
           
@@ -145,14 +88,25 @@ jobs:
           echo "PROJECT_DIR = ${PROJECT_DIR:-<not set>}"
           ls -la "${PROJECT_DIR}"
 
-      - name: Deploy to Railway (non-interactive)
+      - name: Build project (if Node) and Deploy to Railway (non-interactive)
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          # Optionally set RAILWAY_PROJECT or RAILWAY_ENV via secrets if required.
         run: |
           set -e
           cd "$PROJECT_DIR"
+
+          # If package.json exists, attempt npm install and build
+          if [ -f package.json ]; then
+            echo "Detected package.json — running npm ci and npm run build (if defined)"
+            npm ci --omit=dev || npm ci || true
+            # Run build only if script exists; npm will error if missing, so check
+            if node -e 'try{const p=require("./package.json"); console.log(Boolean(p.scripts && p.scripts.build));}catch(e){console.log(false)}' | grep -q "true"; then
+              npm run build
+            else
+              echo "No build script defined — skipping npm run build"
+            fi
+          fi
+
           echo "Running railway up in $(pwd)"
-          # DO NOT call `railway login --token` — the CLI no longer accepts --token.
-          # Provide token via RAILWAY_TOKEN environment variable in CI.
+          # railway reads RAILWAY_TOKEN from environment in CI
           railway up

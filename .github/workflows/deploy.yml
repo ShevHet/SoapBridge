@@ -58,17 +58,21 @@ jobs:
           set -e
           cd "${FRONTEND_DIR}"
           echo "Working in $(pwd)"
-          # Prefer npm ci when package-lock.json present; install production deps only
+
           if [ -f package-lock.json ]; then
             npm ci --omit=dev
           else
             npm install --omit=dev
           fi
-          # Run build if script exists, otherwise try to run 'build' or skip gracefully
+
+          # only run build if script exists in npm run list
           if npm run | grep -q " build"; then
+            echo "Found build script — running npm run build"
             npm run build
           else
-            echo "No build script found. Skipping build step."
+            echo "::warning::No 'build' script found in package.json; skipping build step."
+            echo "Available scripts:"
+            npm run || true
           fi
 
   deploy_railway:
@@ -80,7 +84,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Show repo root (debug)
-        run: ls -la
+        run: |
+          echo "Repository root:"
+          ls -la
+          echo "Top-level folders:"
+          ls -1
 
       - name: Install Railway CLI
         run: curl -sL https://railway.app/install.sh | sh
@@ -138,6 +146,6 @@ jobs:
           set -e
           cd "$PROJECT_DIR"
           echo "Running railway up in $(pwd)"
-          # DO NOT call `railway login --token` — the CLI won't accept --token. Provide token via env.
+          # DO NOT call `railway login --token` — the CLI no longer accepts --token.
           # railway reads RAILWAY_TOKEN from the environment in CI.
           railway up

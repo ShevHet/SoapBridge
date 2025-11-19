@@ -53,6 +53,15 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Ensure npm scripts exist (may modify package.json)
+        run: |
+          if [ -f ".github/scripts/ensure-npm-scripts.sh" ]; then
+            bash .github/scripts/ensure-npm-scripts.sh
+            git --no-pager diff --name-only || true
+          else
+            echo "Helper script not found; skipping"
+          fi
+
       - name: Install dependencies and build frontend (if applicable)
         run: |
           set -e
@@ -139,13 +148,11 @@ jobs:
       - name: Deploy to Railway (non-interactive)
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          # Optional: set RAILWAY_PROJECT or RAILWAY_ENV here if needed
-          # RAILWAY_PROJECT: ${{ secrets.RAILWAY_PROJECT }}
-          # RAILWAY_ENV: production
+          # Optionally set RAILWAY_PROJECT or RAILWAY_ENV via secrets if required.
         run: |
           set -e
           cd "$PROJECT_DIR"
           echo "Running railway up in $(pwd)"
           # DO NOT call `railway login --token` — the CLI no longer accepts --token.
-          # railway reads RAILWAY_TOKEN from the environment in CI.
+          # Provide token via RAILWAY_TOKEN environment variable in CI.
           railway up

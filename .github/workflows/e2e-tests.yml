@@ -34,18 +34,51 @@ jobs:
             echo "Found explicit directory: IcutechTestApi"
             PROJECT_DIR="IcutechTestApi"
           else
-            # Detect by Dockerfile, .csproj or package.json (depth 4)
-            # Exclude node_modules, bin, obj directories
-            PROJECT_DIR=$(find . -maxdepth 4 -type f \( -name "Dockerfile" -o -name "*.csproj" -o -name "package.json" \) -printf '%h\n' | grep -v node_modules | grep -v bin | grep -v obj | grep -v Tests | sort -u | head -n1 || true)
+            # First, try to find a .csproj file that is NOT a test project
+            # Look for .csproj files excluding Tests directories
+            PROJECT_DIR=$(find . -maxdepth 4 -type f -name "*.csproj" ! -path "*/Tests/*" ! -path "*/bin/*" ! -path "*/obj/*" ! -path "*/node_modules/*" -printf '%h\n' | sort -u | head -n1 || true)
+            
+            # If no .csproj found, try Dockerfile
+            if [ -z "$PROJECT_DIR" ]; then
+              PROJECT_DIR=$(find . -maxdepth 4 -type f -name "Dockerfile" ! -path "*/Tests/*" ! -path "*/bin/*" ! -path "*/obj/*" ! -path "*/node_modules/*" -printf '%h\n' | sort -u | head -n1 || true)
+            fi
             
             if [ -z "$PROJECT_DIR" ]; then
-              echo "No Dockerfile, .csproj or package.json found (up to depth 4). Listing top-level files:" >&2
+              echo "No .csproj or Dockerfile found (excluding Tests directories). Listing files:" >&2
+              find . -maxdepth 2 -type f -name "*.csproj" -o -name "Dockerfile" | head -10
               ls -la
               echo "::error::Could not auto-detect project directory. Set PROJECT_DIR manually in the workflow." >&2
               exit 1
             fi
             
             PROJECT_DIR="${PROJECT_DIR#./}"
+            
+            # Verify that the directory contains a .csproj file (not just Dockerfile)
+            # If PROJECT_DIR is '.' and it doesn't contain a .csproj, try to find IcutechTestApi
+            if [ "$PROJECT_DIR" = "." ]; then
+              # Check if root contains any .csproj files (excluding Tests)
+              CSPROJ_COUNT=$(find . -maxdepth 1 -type f -name "*.csproj" ! -name "*Tests*" 2>/dev/null | wc -l)
+              if [ "$CSPROJ_COUNT" -eq 0 ]; then
+                echo "Root directory does not contain .csproj, checking for IcutechTestApi directory..."
+                if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+                  PROJECT_DIR="IcutechTestApi"
+                  echo "Using IcutechTestApi directory instead"
+                else
+                  echo "Warning: Root directory does not contain a .csproj file and IcutechTestApi directory not found"
+                fi
+              fi
+            else
+              # For non-root directories, verify .csproj exists
+              CSPROJ_COUNT=$(find "$PROJECT_DIR" -maxdepth 1 -type f -name "*.csproj" ! -name "*Tests*" 2>/dev/null | wc -l)
+              if [ "$CSPROJ_COUNT" -eq 0 ]; then
+                echo "Warning: Directory $PROJECT_DIR does not contain a .csproj file"
+                # Try fallback to IcutechTestApi if it exists
+                if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+                  PROJECT_DIR="IcutechTestApi"
+                  echo "Falling back to IcutechTestApi directory"
+                fi
+              fi
+            fi
           fi
           
           echo "Found project dir: $PROJECT_DIR"

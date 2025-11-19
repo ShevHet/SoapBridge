@@ -89,6 +89,7 @@ jobs:
         env:
           FRONTEND_URL: http://localhost:5030
           API_URL: http://localhost:5030
+          PROJECT_DIR: ${{ env.PROJECT_DIR }}
 
       - name: Upload test results
         if: always()

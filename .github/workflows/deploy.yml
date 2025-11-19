@@ -1,0 +1,87 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Debug - List directories
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "Looking for project directories..."
+          find . -maxdepth 2 -type d -name "*.csproj" -o -type d -name "*Api" | head -10
+      
+      - name: Auto-detect project directory
+        id: detect-project
+        run: |
+          # Try to find project directory by looking for .csproj files
+          PROJECT_DIR=""
+          if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+            PROJECT_DIR="IcutechTestApi"
+          elif [ -f "*.csproj" ]; then
+            # Find first .csproj file and use its directory
+            PROJECT_DIR=$(dirname $(find . -maxdepth 2 -name "*.csproj" | head -1))
+          else
+            # Fallback to IcutechTestApi
+            PROJECT_DIR="IcutechTestApi"
+          fi
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "Detected project directory: $PROJECT_DIR"
+      
+      - name: Verify project directory exists
+        run: |
+          PROJECT_DIR="${{ steps.detect-project.outputs.project_dir }}"
+          if [ ! -d "$PROJECT_DIR" ]; then
+            echo "Error: Project directory '$PROJECT_DIR' does not exist!"
+            exit 1
+          fi
+          echo "Project directory verified: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR" | head -20
+      
+      - name: Add start script to package.json if needed
+        run: |
+          chmod +x .github/scripts/add-start-script.sh
+          .github/scripts/add-start-script.sh
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      
+      - name: Build project
+        run: |
+          PROJECT_DIR="${{ steps.detect-project.outputs.project_dir }}"
+          cd "$PROJECT_DIR"
+          echo "Building in directory: $(pwd)"
+          dotnet restore
+          dotnet build --configuration Release
+      
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      - name: Debug - Railway CLI version
+        run: railway --version
+      
+      - name: Login to Railway
+        run: railway login --token "$RAILWAY_TOKEN"
+      
+      - name: Debug - Railway status
+        run: railway status || echo "Railway status check completed (may fail if not linked)"
+      
+      - name: Deploy to Railway
+        run: |
+          PROJECT_DIR="${{ steps.detect-project.outputs.project_dir }}"
+          cd "$PROJECT_DIR"
+          echo "Deploying from directory: $(pwd)"
+          railway up --yes

@@ -35,8 +35,8 @@ jobs:
             PROJECT_DIR="IcutechTestApi"
           else
             # First, try to find a .csproj file that is NOT a test project
-            # Look for .csproj files excluding Tests directories
-            PROJECT_DIR=$(find . -maxdepth 4 -type f -name "*.csproj" ! -path "*/Tests/*" ! -path "*/bin/*" ! -path "*/obj/*" ! -path "*/node_modules/*" -printf '%h\n' | sort -u | head -n1 || true)
+            # Look for .csproj files excluding Tests directories and test projects
+            PROJECT_DIR=$(find . -maxdepth 4 -type f -name "*.csproj" ! -path "*/Tests/*" ! -path "*/bin/*" ! -path "*/obj/*" ! -path "*/node_modules/*" ! -name "*Tests.csproj" -printf '%h\n' | sort -u | head -n1 || true)
             
             # If no .csproj found, try Dockerfile
             if [ -z "$PROJECT_DIR" ]; then
@@ -81,6 +81,18 @@ jobs:
             fi
           fi
           
+          # Final check: ensure PROJECT_DIR is not a Tests directory
+          if [ "$PROJECT_DIR" = "IcutechTestApi.Tests" ] || echo "$PROJECT_DIR" | grep -q "Tests$"; then
+            echo "Warning: PROJECT_DIR is set to a Tests directory: $PROJECT_DIR"
+            if [ -d "IcutechTestApi" ] && [ -f "IcutechTestApi/IcutechTestApi.csproj" ]; then
+              PROJECT_DIR="IcutechTestApi"
+              echo "Correcting to IcutechTestApi directory"
+            else
+              echo "Error: Cannot find IcutechTestApi directory to use instead of Tests directory"
+              exit 1
+            fi
+          fi
+          
           echo "Found project dir: $PROJECT_DIR"
           echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
@@ -106,13 +118,28 @@ jobs:
       - name: Build Frontend
         run: |
           set -e
-          cd "$PROJECT_DIR/IcutechTestApi.Tests"
-          echo "Building frontend in directory: $(pwd)"
-          if [ -f "package.json" ]; then
-            npm install
-            npm run build:prod
+          # Determine the API project directory (not Tests)
+          if [ "$PROJECT_DIR" = "IcutechTestApi.Tests" ]; then
+            # If PROJECT_DIR is Tests, use IcutechTestApi instead
+            API_PROJECT_DIR="IcutechTestApi"
           else
-            echo "No package.json found in $PROJECT_DIR/IcutechTestApi.Tests, skipping frontend build"
+            API_PROJECT_DIR="$PROJECT_DIR"
+          fi
+          
+          # Frontend is in wwwroot subdirectory of the API project
+          FRONTEND_DIR="$API_PROJECT_DIR/wwwroot"
+          
+          if [ -d "$FRONTEND_DIR" ]; then
+            cd "$FRONTEND_DIR"
+            echo "Building frontend in directory: $(pwd)"
+            if [ -f "package.json" ]; then
+              npm install
+              npm run build:prod
+            else
+              echo "No package.json found in $FRONTEND_DIR, skipping frontend build"
+            fi
+          else
+            echo "Frontend directory $FRONTEND_DIR does not exist, skipping frontend build"
           fi
 
       - name: Run E2E tests

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-
 set -e
 
 # Find the first package.json (search up to depth 6)
 PKG_PATH=$(find . -maxdepth 6 -name package.json | head -n1 || true)
-
 if [ -z "$PKG_PATH" ]; then
   echo "No package.json found in repo (searched depth 6). Skipping start/build script addition."
   exit 0
 fi
-
 echo "Found package.json at: $PKG_PATH"
 
 # Use node to safely edit JSON
-node -e '
+node - <<'NODE' "$PKG_PATH"
 const fs = require("fs");
 const p = process.argv[1];
-const pkg = JSON.parse(fs.readFileSync(p, "utf8") || "{}");
+const json = fs.readFileSync(p, "utf8") || "{}";
+let pkg;
+try { pkg = JSON.parse(json); } catch (e) { console.error("Failed to parse package.json:", e); process.exit(1); }
 pkg.scripts = pkg.scripts || {};
+
 let changed = false;
 
 // Add start script if missing
@@ -32,15 +32,15 @@ if (!pkg.scripts.start) {
     // Default fallback
     pkg.scripts.start = "node index.js";
   }
-  console.log("Added start script -> " + pkg.scripts.start);
+  console.log("Added start script ->", pkg.scripts.start);
   changed = true;
 } else {
-  console.log("start script already present -> " + pkg.scripts.start);
+  console.log("start script already present ->", pkg.scripts.start);
 }
 
 // Add build script heuristics if missing
 if (!pkg.scripts.build) {
-  const deps = Object.assign({}, pkg.dependencies, pkg.devDependencies);
+  const deps = Object.assign({}, pkg.dependencies || {}, pkg.devDependencies || {});
   if (deps["react-scripts"]) {
     pkg.scripts.build = "react-scripts build";
   } else if (deps["next"]) {
@@ -50,15 +50,14 @@ if (!pkg.scripts.build) {
   } else if (deps["@angular/cli"]) {
     pkg.scripts.build = "ng build --prod";
   } else if (pkg.scripts.dev) {
-    // Conservative: make build call dev or print notice
     pkg.scripts.build = "echo \"No build step defined. If you have a frontend, set scripts.build in package.json\"";
   } else {
     pkg.scripts.build = "echo \"No build step defined. If you have a frontend, set scripts.build in package.json\"";
   }
-  console.log("Added build script -> " + pkg.scripts.build);
+  console.log("Added build script ->", pkg.scripts.build);
   changed = true;
 } else {
-  console.log("build script already present -> " + pkg.scripts.build);
+  console.log("build script already present ->", pkg.scripts.build);
 }
 
 if (changed) {
@@ -67,8 +66,7 @@ if (changed) {
 } else {
   process.exit(0);
 }
-' "$PKG_PATH"
+NODE
 
 # Ensure executable bit for the script in repo
 chmod +x .github/scripts/add-start-build-scripts.sh || true
-

@@ -17,9 +17,14 @@ test.describe('Authentication Forms', () => {
     });
 
     test('should show error for empty fields', async ({ page }) => {
+      // Fill with values first, then clear to trigger validation
+      await page.locator('#loginForm input[name="login"]').fill('test');
+      await page.locator('#loginForm input[name="password"]').fill('test');
+      await page.locator('#loginForm input[name="login"]').clear();
+      await page.locator('#loginForm input[name="password"]').clear();
       await page.locator('#loginForm button[type="submit"]').click();
       
-      // Browser validation should prevent submission or show error
+      // Browser validation should prevent submission
       await page.waitForTimeout(500);
     });
 
@@ -101,6 +106,7 @@ test.describe('Authentication Forms', () => {
 
     test('should show error for empty required fields', async ({ page }) => {
       await page.click('button[data-tab="register"]');
+      await expect(page.locator('#registerForm')).toBeVisible();
       await page.locator('#registerForm button[type="submit"]').click();
 
       // Browser validation should prevent submission
@@ -109,6 +115,7 @@ test.describe('Authentication Forms', () => {
 
     test('should show error for short password', async ({ page }) => {
       await page.click('button[data-tab="register"]');
+      await expect(page.locator('#registerForm')).toBeVisible();
       await page.locator('#registerForm input[name="login"]').fill('newuser');
       await page.locator('#registerForm input[name="password"]').fill('ab'); // Too short
       await page.locator('#registerForm button[type="submit"]').click();
@@ -132,6 +139,7 @@ test.describe('Authentication Forms', () => {
       });
 
       await page.click('button[data-tab="register"]');
+      await expect(page.locator('#registerForm')).toBeVisible();
       await page.locator('#registerForm input[name="login"]').fill('newuser');
       await page.locator('#registerForm input[name="password"]').fill('securepassword');
       await page.locator('#registerForm input[name="email"]').fill('user@example.com');
@@ -150,6 +158,7 @@ test.describe('Authentication Forms', () => {
       await page.route(`${API_URL}/api/auth/register`, route => route.abort());
 
       await page.click('button[data-tab="register"]');
+      await expect(page.locator('#registerForm')).toBeVisible();
       await page.locator('#registerForm input[name="login"]').fill('newuser');
       await page.locator('#registerForm input[name="password"]').fill('password');
       await page.locator('#registerForm button[type="submit"]').click();

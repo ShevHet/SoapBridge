@@ -45,10 +45,30 @@ document.getElementById('registerPassword')?.addEventListener('input', (e) => {
     }
 });
 
+function showMessage(elementId, message, isSuccess) {
+    const messageDiv = document.getElementById(elementId);
+    if (messageDiv) {
+        messageDiv.textContent = message;
+        messageDiv.className = isSuccess ? 'alert alert-success success' : 'alert alert-danger error';
+        messageDiv.style.display = 'block';
+    }
+}
+
+document.querySelectorAll('button[data-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+        document.getElementById('loginMessage').style.display = 'none';
+        document.getElementById('registerMessage').style.display = 'none';
+    });
+});
+
 document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const resultDiv = document.getElementById('loginResult');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    
     resultDiv.innerHTML = '<div class="alert alert-info">Выполняется вход...</div>';
+    submitButton.disabled = true;
+    submitButton.classList.add('loading');
 
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
@@ -77,15 +97,21 @@ document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
                 <strong>Успешно!</strong> ${data.message}
                 <pre class="mt-2">${JSON.stringify(data.entity, null, 2)}</pre>
             </div>`;
+            showMessage('loginMessage', 'Вход выполнен успешно', true);
         } else {
             resultDiv.innerHTML = `<div class="alert alert-danger">
                 <strong>Ошибка!</strong> ${data.message || 'Неверные учетные данные'}
             </div>`;
+            showMessage('loginMessage', data.message || 'Неверные учетные данные', false);
         }
     } catch (error) {
         resultDiv.innerHTML = `<div class="alert alert-danger">
             <strong>Ошибка сети!</strong> ${error.message}
         </div>`;
+        showMessage('loginMessage', 'Ошибка сети', false);
+    } finally {
+        submitButton.disabled = false;
+        submitButton.classList.remove('loading');
     }
 });
 
@@ -99,6 +125,12 @@ document.getElementById('registerForm')?.addEventListener('submit', async (e) =>
     const email = document.getElementById('registerEmail').value;
     const firstName = document.getElementById('registerFirstName').value;
     const lastName = document.getElementById('registerLastName').value;
+
+    if (password.length < 3) {
+        showMessage('registerMessage', 'Пароль должен содержать минимум 3 символа', false);
+        resultDiv.innerHTML = '<div class="alert alert-danger">Пароль должен содержать минимум 3 символа</div>';
+        return;
+    }
 
     try {
         const response = await fetchWithRetry(`${API_BASE_URL}/api/auth/register`, {
@@ -127,15 +159,18 @@ document.getElementById('registerForm')?.addEventListener('submit', async (e) =>
                 <strong>Успешно!</strong> ${data.message}
                 ${data.createdCustomerId ? `<br><small>ID пользователя: ${data.createdCustomerId}</small>` : ''}
             </div>`;
+            showMessage('registerMessage', `Регистрация успешна. ID: ${data.createdCustomerId}`, true);
         } else {
             resultDiv.innerHTML = `<div class="alert alert-danger">
                 <strong>Ошибка!</strong> ${data.message || 'Ошибка регистрации'}
             </div>`;
+            showMessage('registerMessage', data.message || 'Ошибка регистрации', false);
         }
     } catch (error) {
         resultDiv.innerHTML = `<div class="alert alert-danger">
             <strong>Ошибка сети!</strong> ${error.message}
         </div>`;
+        showMessage('registerMessage', 'Ошибка сети', false);
     }
 });
 

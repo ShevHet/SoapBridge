@@ -1,0 +1,12 @@
+services:  
+  - type: web
+    name: icutech-test-api
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/example
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icutech-test-api
+    ports:
+      - "8080:10000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - PORT=10000
+      - SoapService__Url=http://isapi.mekashron.com/icu-tech/icutech-test.dll
+      - SoapService__UseMockClient=false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/api/example"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - icutech-network
+
+networks:
+  icutech-network:
+    driver: bridge
+

@@ -8,7 +8,7 @@ public static class UsernameValidator
     private const int MaxLength = 50;
 
     private static readonly Regex UsernameRegex = new(
-        @"^[a-zA-Z0-9_-]+$",
+        @"^[a-zA-Zа-яА-ЯёЁ0-9_-]+$",
         RegexOptions.Compiled
     );
 
@@ -31,7 +31,7 @@ public static class UsernameValidator
 
         if (!UsernameRegex.IsMatch(username))
         {
-            return (false, "Логин может содержать только латинские буквы, цифры, дефис и подчеркивание");
+            return (false, "Логин может содержать только латинские и русские буквы, цифры, дефис и подчеркивание");
         }
 
         if (username.StartsWith('-') || username.StartsWith('_') || 

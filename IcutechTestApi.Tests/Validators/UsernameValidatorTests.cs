@@ -36,7 +36,7 @@ public class UsernameValidatorTests
     [InlineData("Иван-Петров", true, "")]
     [InlineData("Алексей2024", true, "")]
     [InlineData("user_русский", true, "")]
-    [InlineData("ёж", true, "")]
+    [InlineData("ёжик", true, "")]
     [InlineData("Ёжик123", true, "")]
     public void Validate_WithCyrillicCharacters_ShouldBeValid(string username, bool expectedValid, string expectedError)
     {

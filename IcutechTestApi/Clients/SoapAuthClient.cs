@@ -18,7 +18,7 @@ public class SoapAuthClient : ISoapAuthClient
         _logger = logger;
         _soapServiceUrl = configuration["SoapService:Url"] 
             ?? Environment.GetEnvironmentVariable("SoapService__Url") 
-            ?? "http://isapi.mekashron.com/icu-tech/icutech-test.dll";
+            ?? "http://isapi.mekashron.com/icu-tech/icutech-test.dll/soap/IICUTech";
     }
 
     public async Task<LoginResult> LoginAsync(string login, string password)
@@ -26,8 +26,11 @@ public class SoapAuthClient : ISoapAuthClient
         try
         {
             var soapEnvelope = BuildLoginSoapEnvelope(login, password);
-            var response = await _httpClient.PostAsync(_soapServiceUrl, 
-                new StringContent(soapEnvelope, Encoding.UTF8, "text/xml"));
+            var request = new HttpRequestMessage(HttpMethod.Post, _soapServiceUrl);
+            request.Content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+            request.Headers.Add("SOAPAction", "\"urn:ICUTech.Intf-IICUTech#Login\"");
+            
+            var response = await _httpClient.SendAsync(request);
 
             var responseContent = await response.Content.ReadAsStringAsync();
             _logger.LogInformation("SOAP Login Response: {Response}", responseContent);
@@ -84,14 +87,18 @@ public class SoapAuthClient : ISoapAuthClient
     private string BuildLoginSoapEnvelope(string login, string password)
     {
         return $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soap:Envelope xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
-  <soap:Body>
-    <Login xmlns=""http://tempuri.org/"">
-      <login>{EscapeXml(login)}</login>
-      <password>{EscapeXml(password)}</password>
-    </Login>
-  </soap:Body>
-</soap:Envelope>";
+<SOAP-ENV:Envelope xmlns:SOAP-ENV=""http://schemas.xmlsoap.org/soap/envelope/"" 
+                   xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" 
+                   xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" 
+                   xmlns:SOAP-ENC=""http://schemas.xmlsoap.org/soap/encoding/"">
+  <SOAP-ENV:Body SOAP-ENV:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+    <ns1:Login xmlns:ns1=""urn:ICUTech.Intf-IICUTech"">
+      <UserName xsi:type=""xsd:string"">{EscapeXml(login)}</UserName>
+      <Password xsi:type=""xsd:string"">{EscapeXml(password)}</Password>
+      <IPs xsi:type=""xsd:string""></IPs>
+    </ns1:Login>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>";
     }
 
     private string BuildRegisterSoapEnvelope(RegisterRequest request)

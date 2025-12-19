@@ -322,11 +322,6 @@ reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report
 - Bootstrap Team
 - Playwright Team
 - Railway & Render за бесплатный хостинг
-
-## 📧 Контакты
-
-**Вопросы?** Создайте [issue](https://github.com/your-username/icutech-test-api/issues) в GitHub.
-
 ---
 
 **Made with ❤️ and .NET 9**
